@@ -1,0 +1,16 @@
+pillow
+requests
+jupyter
+numpy
+pandas
+matplotlib
+seaborn
+graphviz
+Cython
+streamlit
+ultralytics
+streamlit-webrtc
+streamlit-autorefresh
+av
+opencv-python-headless
+plotly
