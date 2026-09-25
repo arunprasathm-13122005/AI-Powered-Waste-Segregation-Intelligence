@@ -904,32 +904,34 @@ if LIVE_CAMERA_AVAILABLE:
 
         def recv(self, frame):
             try:
-                # Read the WebRTC frame directly as BGR.
-                # This avoids unnecessary RGB <-> BGR conversions and
-                # works better with many virtual webcam drivers such as DroidCam.
+                # Decode WebRTC frames explicitly as RGB, then convert to
+                # BGR only for OpenCV/YOLO. Return video frames as RGB to keep
+                # input/output pixel formats consistent across virtual cameras.
                 try:
-                    frame_bgr = frame.to_ndarray(format="bgr24")
-                except Exception:
                     frame_rgb = frame.to_ndarray(format="rgb24")
-                    frame_bgr = cv2.cvtColor(
-                        frame_rgb,
-                        cv2.COLOR_RGB2BGR
+                except Exception:
+                    frame_bgr_input = frame.to_ndarray(format="bgr24")
+                    frame_rgb = cv2.cvtColor(
+                        frame_bgr_input,
+                        cv2.COLOR_BGR2RGB
                     )
 
-                # Keep processing light enough for live camera use.
-                h, w = frame_bgr.shape[:2]
+                frame_rgb = np.ascontiguousarray(frame_rgb, dtype=np.uint8)
+                h, w = frame_rgb.shape[:2]
 
+                # Keep processing light enough for live camera use.
                 max_width = 960
                 if w > max_width:
                     scale = max_width / float(w)
-                    frame_bgr = cv2.resize(
-                        frame_bgr,
-                        (
-                            int(w * scale),
-                            int(h * scale)
-                        ),
+                    new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+                    frame_rgb = cv2.resize(
+                        frame_rgb,
+                        new_size,
                         interpolation=cv2.INTER_AREA
                     )
+
+                frame_rgb = np.ascontiguousarray(frame_rgb)
+                frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
                 # Keep the Streamlit slider value synchronized with the
                 # persistent WebRTC processor.
@@ -963,8 +965,8 @@ if LIVE_CAMERA_AVAILABLE:
                         self.latest_timestamp = time.time()
 
                     return av.VideoFrame.from_ndarray(
-                        frame_bgr,
-                        format="bgr24"
+                        np.ascontiguousarray(frame_rgb),
+                        format="rgb24"
                     )
 
                 # YOLO boxes + labels
@@ -1141,9 +1143,10 @@ if LIVE_CAMERA_AVAILABLE:
                         cv2.LINE_AA
                     )
 
+                annotated_rgb = cv2.cvtColor(annotated_bgr, cv2.COLOR_BGR2RGB)
                 return av.VideoFrame.from_ndarray(
-                    annotated_bgr,
-                    format="bgr24"
+                    np.ascontiguousarray(annotated_rgb),
+                    format="rgb24"
                 )
 
             except Exception as e:
@@ -1155,17 +1158,17 @@ if LIVE_CAMERA_AVAILABLE:
                 # instead of replacing it with a fake coloured screen.
                 try:
                     try:
-                        fallback_bgr = frame.to_ndarray(format="bgr24")
-                    except Exception:
                         fallback_rgb = frame.to_ndarray(format="rgb24")
-                        fallback_bgr = cv2.cvtColor(
-                            fallback_rgb,
-                            cv2.COLOR_RGB2BGR
+                    except Exception:
+                        fallback_bgr = frame.to_ndarray(format="bgr24")
+                        fallback_rgb = cv2.cvtColor(
+                            fallback_bgr,
+                            cv2.COLOR_BGR2RGB
                         )
 
                     return av.VideoFrame.from_ndarray(
-                        fallback_bgr,
-                        format="bgr24"
+                        np.ascontiguousarray(fallback_rgb, dtype=np.uint8),
+                        format="rgb24"
                     )
 
                 except Exception:
